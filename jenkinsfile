@@ -1,0 +1,45 @@
+pipeline{
+    agent any
+    environment{
+        imageName = 'htmlserver'
+        registryCredentials = "nexus"
+        registry = "ec2-54-196-172-23.compute-1.amazonaws.com:8085/"
+        dockerImage= ''
+    }
+    stages{
+        stage("git url"){
+            steps{
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/priyanka-1994/demo-project.git']]])
+            }
+        }
+        stage("build docker image"){
+            steps{
+                script{
+                    dockerImage=docker.build imageName
+                }
+            }
+        }
+        stage("uplaoding nexus"){
+            steps{
+                script{
+                    docker.withRegistry( 'http://'  + registry, registryCredentials ) {
+                    dockerImage.push('latest')    
+                    }
+                }
+            }
+        }
+        stage('Stop running containers'){
+            steps{
+                sh 'docker ps -f name=nexus -q | xargs --no-run-if-empty docker container stop'
+                sh 'docker container ls -a -fname=nexus -q | xargs -r docker container rm'
+            }
+        }
+        stage("docker run"){
+            steps{
+                script{
+                    sh 'docker run -d -p 80:80 --rm --name nexus ' + registry + imageName
+                }
+            }
+        }
+    }
+}
